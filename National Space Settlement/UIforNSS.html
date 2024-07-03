@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mars Image Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Mars Image Tracker</h1>
+            <button id="toggle-mode" aria-label="Toggle light/dark mode">Toggle Mode</button>
+        </header>
+        <main>
+            <div id="nasa-updater"></div>
+            <div id="mars-image-tracker"></div>
+            <select id="date-filter">
+                <!-- options for dates -->
+            </select>
+            <div id="image-container"></div>
+            <div id="code-editor">
+                <textarea id="code-input" placeholder="Edit code here..."></textarea>
+                <button id="run-code" aria-label="Run code">Run Code</button>
+            </div>
+        </main>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
+<div id="nasa-updater"></div>
+<div id="mars-image-tracker"></div>
+<select id="date-filter">
+    <!-- options for dates -->
+</select>

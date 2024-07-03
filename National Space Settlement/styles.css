@@ -1,0 +1,136 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #333; /* dark mode background */
+    color: #fff; /* white text */
+    transition: background-color 0.5s ease; /* smooth transition for light/dark mode */
+}
+
+.container {
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 20px;
+    background-color: #444; /* dark mode container background */
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #555;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 0;
+}
+
+#toggle-mode {
+    background-color: #666;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#toggle-mode:hover {
+    background-color: #777;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+#image-container {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.image {
+    width: 30%;
+    margin: 10px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#code-editor {
+    width: 100%;
+    padding: 20px;
+    background-color: #f0f0f0; /* light gray background */
+    border: 1px solid #ccc;
+    border-radius: 10px;
+}
+
+#code-input {
+    width: 100%;
+    height: 200px;
+    padding: 10px;
+    font-size: 14px;
+    font-family: monospace;
+    resize: vertical;
+}
+
+#run-code {
+    background-color: #4CAF50; /* green button */
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#run-code:hover {
+    background-color: #3e8e41;
+}
+
+/* light mode styles */
+.light-mode {
+    background-color: #f0f0f0; /* light gray background */
+    color: #333; /* dark text */
+}
+
+.light-mode .container {
+    background-color: #fff; /* white container background */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.light-mode #code-editor {
+    background-color: #fff; /* white background */
+    border: 1px solid #ddd;
+}
+.apod-container {
+    background-color: #333;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  }
+  
+  .apod-image {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    border-radius: 10px;
+  }
+  
+  .apod-explanation {
+    color: #fff;
+    font-size: 18px;
+    margin-top: 20px;
+  }
