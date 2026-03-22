@@ -1,6 +1,7 @@
 // src/lib/types.ts
 
-/** * Astronomy Picture of the Day (APOD) response from NASA API 
+/** 
+ * Astronomy Picture of the Day (APOD) response from NASA API 
  */
 export interface ApodData {
   readonly date: string;
@@ -10,11 +11,17 @@ export interface ApodData {
   readonly title: string;
   readonly url: string;
   readonly copyright?: string;
-  /** Helper to quickly toggle between <img> and <iframe> in Svelte templates */
-  readonly isVideo: boolean; 
 }
 
-/** * Formatted Mars Image data parsed from the NASA RSS feed 
+/**
+ * UI-enhanced APOD model (derived, NOT from API)
+ */
+export interface ApodViewModel extends ApodData {
+  readonly isVideo: boolean;
+}
+
+/** 
+ * Formatted Mars Image data parsed from NASA sources 
  */
 export interface MarsItem {
   readonly title: string;
@@ -25,56 +32,68 @@ export interface MarsItem {
   readonly cameraName?: string;
 }
 
-/** * The main Navigation IDs used to switch between active UI panels 
+/** 
+ * Navigation panel identifiers 
  */
-export type PanelID = 'Explorer' | 'JotDown' | 'QuickBits' | 'Eyes';
+export type PanelID =
+  | 'Home'
+  | 'Explorer'
+  | 'JotDown'
+  | 'QuickBits'
+  | 'Eyes';
 
-/** * Definition for Sidebar buttons 
+/** 
+ * Sidebar navigation item 
  */
 export interface NavItem {
   readonly id: PanelID;
-  readonly icon: string;
   readonly label: string;
+  // optional future extension
+  // readonly icon?: string;
 }
 
-/** * Individual note structure for the 'Jot Down' module 
+/** 
+ * Note structure for Jot Down module 
  */
 export interface Note {
   readonly id: string;
-  /** Content of the note, allows markdown or plain text */
-  content: string; 
+  content: string;
   readonly createdAt: number;
   updatedAt: number;
   tags: string[];
 }
 
-/** * Scientific or Graphing calculation entry 
+/** 
+ * Scientific or graphing calculation entry 
  */
 export interface CalculatorExpression {
   readonly id: string;
-  /** The raw input string from the user (e.g., "sin(45) * 2") */
-  expression: string; 
-  /** Computed result or error message from the math engine */
-  result?: number | string; 
-  /** Coordinates for rendering SVG graphs if type is 'graph' */
-  graphData?: number[]; 
+  expression: string;
+  result?: number | string;
+
+  // Proper graph structure instead of useless number[]
+  graphData?: { x: number; y: number }[];
+
   readonly createdAt: number;
   updatedAt: number;
+
   type: 'scientific' | 'graph';
 }
 
-/** * Internal state for the Jot Down module, used for persistence 
+/** 
+ * Jot Down persistence state 
  */
 export interface JotDownState {
   notes: Note[];
   calculator: CalculatorExpression[];
 }
 
-/** * Chat message structure for the SkyNet/QuickBits AI overlay 
+/** 
+ * Chat message for SkyNet / QuickBits 
  */
 export interface QuickBitsMessage {
   readonly id: string;
-  readonly author: 'user' | 'skynet';
+  readonly role: 'user' | 'skynet';
   readonly content: string;
   readonly timestamp: number;
 }
