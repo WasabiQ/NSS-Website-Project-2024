@@ -1,0 +1,9 @@
+# Hide auto-generated or config files from GitHub language stats
+# We only want Svelte, TypeScript, Tailwind, and Python to show up
+*.js linguist-detectable=false
+*.cjs linguist-detectable=false
+*.json linguist-detectable=false
+*.md linguist-detectable=false
+
+# Legacy directory will be deleted by user, but let's hide it from stats just in case
+Legacy/* linguist-detectable=false
