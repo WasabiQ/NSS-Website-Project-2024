@@ -4,6 +4,9 @@
   import { fade } from "svelte/transition";
   import type { ApodData, PanelID, NavItem } from "$lib/types";
   import Notes from "../components/Notes.svelte";
+  import QuickBits from "../components/QuickBits.svelte";
+  import ExplorerView from "../components/ExplorerView.svelte";
+  import EyesView from "../components/EyesView.svelte";
 
   // ==========================
   // DEVICE CHECK
@@ -65,6 +68,10 @@
     "/explorer": "Explorer",
     "/settings": "JotDown",
     "/home": "Home",
+    "/skynet": "QuickBits",
+    "/quickbits": "QuickBits",
+    "/jotdown": "JotDown",
+    "/notes": "JotDown",
   };
 
   const availableCommands = Object.keys(commandMap);
@@ -141,6 +148,7 @@
     try {
       const res = await fetch(
         `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY`,
+        { referrerPolicy: "no-referrer" },
       );
       const data = await res.json();
       apod = data;
@@ -264,16 +272,18 @@
 
         {#if apod}
           <div class="w-full flex flex-col gap-6">
-            <div
-              class="rounded-lg overflow-hidden border border-[#2a3138] bg-[#11161c]"
+            <button
+              class="rounded-lg overflow-hidden border border-[#2a3138] bg-[#11161c] w-full block text-left"
+              onclick={() => (selectedImage = apod?.url || null)}
             >
               <img
                 src={apod.url}
-                onclick={() => (selectedImage = apod?.url || null)}
                 class="w-full object-cover max-h-[50vh] grayscale hover:grayscale-0 transition-all duration-1000 cursor-pointer"
-                alt="Space"
+                alt="NASA Astronomy Picture of the Day: {apod.title}"
+                crossorigin="anonymous"
+                referrerpolicy="no-referrer"
               />
-            </div>
+            </button>
 
             <div
               class="group relative rounded-md {terminalFocus
@@ -328,20 +338,47 @@
       </div>
     {/if}
 
+    {#if activePanel === "Explorer"}
+      <div class="w-full h-[90vh]" transition:fade>
+        <ExplorerView />
+      </div>
+    {/if}
+
     {#if activePanel === "JotDown"}
       <div class="w-full max-w-5xl h-[85vh]" transition:fade>
         <Notes />
       </div>
     {/if}
 
+    {#if activePanel === "QuickBits"}
+      <div class="w-full max-w-4xl h-[85vh]" transition:fade>
+        <QuickBits />
+      </div>
+    {/if}
+
+    {#if activePanel === "Eyes"}
+      <div class="w-full max-w-6xl h-[85vh]" transition:fade>
+        <EyesView />
+      </div>
+    {/if}
+
     {#if selectedImage}
       <div
         class="fixed inset-0 bg-black/95 flex items-center justify-center z-[100]"
+        role="dialog"
+        aria-label="Image lightbox"
+        tabindex="-1"
         onclick={() => (selectedImage = null)}
+        onkeydown={(e) => {
+          if (e.key === "Escape") selectedImage = null;
+        }}
       >
         <img
           src={selectedImage}
+          alt="Enlarged view"
           class="max-w-[90%] max-h-[90%] border border-[#4da3ff]"
+          crossorigin="anonymous"
+          referrerpolicy="no-referrer"
         />
       </div>
     {/if}
@@ -349,7 +386,7 @@
 </div>
 
 <style>
-  body {
+  :global(body) {
     cursor: none;
     margin: 0;
   }
