@@ -6,6 +6,7 @@
         type MapTheme,
         type FlightMapMode,
     } from "./Explorer";
+    import * as Cesium from "cesium";
 
     let containerRef = $state<HTMLDivElement | null>(null);
     let explorer: Explorer | null = null;
@@ -14,6 +15,11 @@
     let flightMapOn = $state(true);
     let loading = $state(true);
     let error = $state("");
+    let webglError = $state(false);
+
+    let showISS = $state(false);
+    let issInterval: ReturnType<typeof setInterval> | null = null;
+    let issEntity: any = null;
 
     const modes: { value: ExplorerMode; label: string }[] = [
         { value: "dual", label: "Dual" },
@@ -62,15 +68,72 @@
             });
             loading = false;
         } catch (err: any) {
-            error = err.message || "Failed to initialize Explorer";
             loading = false;
+            const msg = err.message || "";
+            if (msg.includes("WebGL") || msg.includes("graphics")) {
+                webglError = true;
+            } else {
+                error = msg || "Failed to initialize Explorer";
+            }
         }
     });
 
     onDestroy(() => {
+        if (issInterval) clearInterval(issInterval);
         explorer?.destroy();
         explorer = null;
     });
+
+    const toggleISS = async () => {
+        showISS = !showISS;
+        const viewer = explorer?.cesiumViewer;
+        if (!viewer) return;
+
+        // Dynamic import of Cesium just for types/constants if we need them,
+        // but viewer provides entities.
+        if (showISS) {
+            issEntity = viewer.entities.add({
+                id: "ISS_LIVE",
+                position: undefined,
+                point: {
+                    pixelSize: 8,
+                    color: Cesium.Color.RED,
+                    outlineColor: Cesium.Color.WHITE,
+                    outlineWidth: 2,
+                },
+                label: {
+                    text: "ISS (LIVE)",
+                    font: "10pt monospace",
+                    pixelOffset: new Cesium.Cartesian2(0, -12),
+                },
+            });
+            fetchISS();
+            issInterval = setInterval(fetchISS, 4000);
+        } else {
+            if (issInterval) clearInterval(issInterval);
+            if (issEntity) viewer.entities.remove(issEntity);
+            issEntity = null;
+        }
+    };
+
+    const fetchISS = async () => {
+        try {
+            const res = await fetch(
+                "https://api.wheretheiss.at/v1/satellites/25544",
+                { referrerPolicy: "no-referrer" },
+            );
+            const data = await res.json();
+            if (issEntity && data.latitude) {
+                issEntity.position = Cesium.Cartesian3.fromDegrees(
+                    data.longitude,
+                    data.latitude,
+                    data.altitude * 1000,
+                );
+            }
+        } catch {
+            /* ignore */
+        }
+    };
 
     const changeMode = (mode: ExplorerMode) => {
         currentMode = mode;
@@ -147,6 +210,17 @@
         >
             Flight {flightMapOn ? "ON" : "OFF"}
         </button>
+
+        <!-- ISS Live Tracker -->
+        <button
+            onclick={toggleISS}
+            class="px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold transition-all rounded border
+      {showISS
+                ? 'border-red-500 text-red-500 bg-red-500/10 animate-pulse'
+                : 'border-[#2a3138] text-[#9da7b3]'}"
+        >
+            ISS {showISS ? "TRACKING" : "OFF"}
+        </button>
     </div>
 
     <!-- Globe Container -->
@@ -180,6 +254,31 @@
                         Cesium requires a valid ion access token. Set
                         window.CESIUM_BASE_URL and Cesium.Ion.defaultAccessToken
                         before loading.
+                    </p>
+                </div>
+            </div>
+        {/if}
+
+        {#if webglError}
+            <div
+                class="absolute inset-0 flex items-center justify-center bg-[#0b0f14] z-10"
+            >
+                <div
+                    class="text-center max-w-md border border-red-500/30 bg-red-500/5 p-8 rounded-lg"
+                >
+                    <p
+                        class="text-red-400 font-bold mb-4 uppercase tracking-widest text-lg"
+                    >
+                        WebGL Disabled
+                    </p>
+                    <p class="text-[#9da7b3] text-sm leading-relaxed mb-4">
+                        The Explorer subsystem requires hardware acceleration
+                        (WebGL) to render the 3D globe.
+                    </p>
+                    <p class="text-[#9da7b3]/60 text-xs italic">
+                        This is often disabled in privacy browsers (LibreWolf,
+                        Tor) or headless environments. Please enable WebGL in
+                        your browser settings to access this module.
                     </p>
                 </div>
             </div>

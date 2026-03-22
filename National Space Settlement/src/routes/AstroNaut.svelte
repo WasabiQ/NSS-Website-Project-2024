@@ -7,6 +7,7 @@
   import QuickBits from "../components/QuickBits.svelte";
   import ExplorerView from "../components/ExplorerView.svelte";
   import EyesView from "../components/EyesView.svelte";
+  import DsnView from "../components/DsnView.svelte";
 
   // ==========================
   // DEVICE CHECK
@@ -62,6 +63,65 @@
   let terminalFocus = $state(false);
   let terminalRef = $state<HTMLInputElement | null>(null);
 
+  // ==========================
+  // AUDIOSCAPE SYSTEM
+  // ==========================
+  let audioEnabled = $state(false);
+  let audioCtx: AudioContext | null = null;
+  let humOsc: OscillatorNode | null = null;
+  let humGain: GainNode | null = null;
+
+  const toggleAudio = () => {
+    if (!audioEnabled) {
+      const AudioContextCtor =
+        window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextCtor) return;
+      audioCtx = new AudioContextCtor();
+      humOsc = audioCtx.createOscillator();
+      humGain = audioCtx.createGain();
+      humOsc.type = "sine";
+      humOsc.frequency.value = 55;
+      humGain.gain.value = 0.05;
+      humOsc.connect(humGain);
+      humGain.connect(audioCtx.destination);
+      humOsc.start();
+      audioEnabled = true;
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    } else {
+      humOsc?.stop();
+      humOsc?.disconnect();
+      humGain?.disconnect();
+      audioCtx?.suspend();
+      audioEnabled = false;
+    }
+  };
+
+  const playKeystroke = () => {
+    if (!audioEnabled || !audioCtx) return;
+    try {
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(
+        40,
+        audioCtx.currentTime + 0.05,
+      );
+      gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioCtx.currentTime + 0.05,
+      );
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.05);
+    } catch {
+      /* ignore audio errors */
+    }
+  };
+
   const commandMap: Record<string, PanelID> = {
     "/eye": "Eyes",
     "/eyes": "Eyes",
@@ -72,6 +132,7 @@
     "/quickbits": "QuickBits",
     "/jotdown": "JotDown",
     "/notes": "JotDown",
+    "/dsn": "DSN",
   };
 
   const availableCommands = Object.keys(commandMap);
@@ -130,6 +191,7 @@
     { id: "JotDown", label: "Jot Down" },
     { id: "QuickBits", label: "Skynet" },
     { id: "Eyes", label: "Eyes" },
+    { id: "DSN", label: "DSN" },
   ];
 
   // ==========================
@@ -137,12 +199,16 @@
   // ==========================
   const fetchApodWeekly = async () => {
     const WEEK = 604800000;
-    const cache = localStorage.getItem("apod");
-    const time = localStorage.getItem("apod_time");
+    try {
+      const cache = localStorage.getItem("apod");
+      const time = localStorage.getItem("apod_time");
 
-    if (cache && time && Date.now() - Number(time) < WEEK) {
-      apod = JSON.parse(cache);
-      return;
+      if (cache && time && Date.now() - Number(time) < WEEK) {
+        apod = JSON.parse(cache);
+        return;
+      }
+    } catch {
+      /* LibreWolf strict isolation fallback */
     }
 
     try {
@@ -152,8 +218,12 @@
       );
       const data = await res.json();
       apod = data;
-      localStorage.setItem("apod", JSON.stringify(data));
-      localStorage.setItem("apod_time", Date.now().toString());
+      try {
+        localStorage.setItem("apod", JSON.stringify(data));
+        localStorage.setItem("apod_time", Date.now().toString());
+      } catch {
+        /* ignore */
+      }
     } catch {
       triggerToast("APOD_ERR");
     }
@@ -285,6 +355,15 @@
               />
             </button>
 
+            <button
+              class="w-full py-2 bg-[#161b22] border border-[#2a3138] rounded-md text-[10px] uppercase tracking-widest hover:border-[#4da3ff] hover:text-[#4da3ff] transition-all {audioEnabled
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'text-[#9da7b3]'}"
+              onclick={toggleAudio}
+            >
+              OS AUDIOSCAPE {audioEnabled ? "[ ACTIVE ]" : "[ OFFLINE ]"}
+            </button>
+
             <div
               class="group relative rounded-md {terminalFocus
                 ? 'ring-1 ring-[#4da3ff]/50'
@@ -322,6 +401,7 @@
                       terminalFocus = false;
                       hovering = false;
                     }}
+                    oninput={playKeystroke}
                     spellcheck="false"
                     class="relative z-10 w-full bg-transparent outline-none text-sm"
                   />
@@ -359,6 +439,12 @@
     {#if activePanel === "Eyes"}
       <div class="w-full max-w-6xl h-[85vh]" transition:fade>
         <EyesView />
+      </div>
+    {/if}
+
+    {#if activePanel === "DSN"}
+      <div class="w-full max-w-6xl h-[85vh]" transition:fade>
+        <DsnView />
       </div>
     {/if}
 

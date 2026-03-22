@@ -40,14 +40,22 @@
   // ── Auto-save notes text ──
   $effect(() => {
     if (mounted) {
-      localStorage.setItem(STORAGE_KEY_NOTES, notesText);
+      try {
+        localStorage.setItem(STORAGE_KEY_NOTES, notesText);
+      } catch {
+        /* ignore */
+      }
     }
   });
 
   // ── Auto-save calc history ──
   $effect(() => {
     if (mounted && calcHistory.length > 0) {
-      localStorage.setItem(STORAGE_KEY_CALC, JSON.stringify(calcHistory));
+      try {
+        localStorage.setItem(STORAGE_KEY_CALC, JSON.stringify(calcHistory));
+      } catch {
+        /* ignore */
+      }
     }
   });
 

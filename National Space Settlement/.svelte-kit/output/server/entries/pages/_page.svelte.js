@@ -154,7 +154,8 @@ function AstroNaut($$renderer, $$props) {
       { id: "Explorer", label: "Explorer" },
       { id: "JotDown", label: "Jot Down" },
       { id: "QuickBits", label: "Skynet" },
-      { id: "Eyes", label: "Eyes" }
+      { id: "Eyes", label: "Eyes" },
+      { id: "DSN", label: "DSN" }
     ];
     $$renderer2.push(`<div class="w-screen h-screen bg-[#0b0f14] text-[#e6edf3] font-mono flex overflow-hidden select-none svelte-1n9x7k9">`);
     if (!isMobile) {
@@ -193,6 +194,10 @@ function AstroNaut($$renderer, $$props) {
         $$renderer2.push("<!--[-1-->");
       }
       $$renderer2.push(`<!--]--></div>`);
+    }
+    $$renderer2.push(`<!--]--> `);
+    {
+      $$renderer2.push("<!--[-1-->");
     }
     $$renderer2.push(`<!--]--> `);
     {

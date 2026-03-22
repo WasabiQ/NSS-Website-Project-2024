@@ -40,7 +40,8 @@ export type PanelID =
   | 'Explorer'
   | 'JotDown'
   | 'QuickBits'
-  | 'Eyes';
+  | 'Eyes'
+  | 'DSN';
 
 /** 
  * Sidebar navigation item 

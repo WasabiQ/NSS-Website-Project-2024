@@ -31,6 +31,7 @@
     let cesiumContainer = $state<HTMLDivElement | null>(null);
     let viewer: Cesium.Viewer | null = null;
     let loadingTrek = $state(false);
+    let webglError = $state(false);
 
     // ── Lifecycle ─────────────────────────────────────────────
     onMount(() => {
@@ -152,8 +153,12 @@
             (viewer.cesiumWidget.creditContainer as HTMLElement).style.display =
                 "none";
             updateTrekBody();
-        } catch (err) {
+        } catch (err: any) {
             console.error("Cesium init failed", err);
+            const msg = err.message || "";
+            if (msg.includes("WebGL") || msg.includes("graphics")) {
+                webglError = true;
+            }
         }
         loadingTrek = false;
     };
@@ -362,6 +367,31 @@
                                 class="text-[10px] uppercase tracking-widest text-emerald-400/60"
                                 >Initializing WebGL Engine...</span
                             >
+                        </div>
+                    </div>
+                {/if}
+                {#if webglError}
+                    <div
+                        class="absolute inset-0 flex items-center justify-center bg-[#0b0f14] z-10 p-6"
+                    >
+                        <div
+                            class="text-center max-w-md border border-red-500/30 bg-red-500/5 p-8 rounded-lg"
+                        >
+                            <p
+                                class="text-red-400 font-bold mb-4 uppercase tracking-widest text-lg"
+                            >
+                                WebGL Disabled
+                            </p>
+                            <p
+                                class="text-[#9da7b3] text-sm leading-relaxed mb-4"
+                            >
+                                The NASA Trek subsystem requires hardware
+                                acceleration (WebGL).
+                            </p>
+                            <p class="text-[#9da7b3]/60 text-xs italic">
+                                This is disabled in strict privacy browsers via
+                                about:config. Please enable WebGL.
+                            </p>
                         </div>
                     </div>
                 {/if}
