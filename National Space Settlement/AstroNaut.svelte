@@ -1,205 +1,303 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { fade, fly } from 'svelte/transition';
-  import type { ApodData, MarsItem, PanelID, NavItem } from '$lib/types';
+  import { onMount } from 'svelte';
+  import { spring } from 'svelte/motion';
+  import { fade } from 'svelte/transition';
+  import type { ApodData, PanelID, NavItem } from '$lib/types';
 
-  // === SYSTEM STATE ===
+  // ==========================
+  // DEVICE CHECK
+  // ==========================
+  const isMobile = typeof window !== 'undefined'
+    ? window.matchMedia('(pointer: coarse)').matches
+    : false;
+
+  let active = $state(true);
+
+  // ==========================
+  // CURSOR SYSTEM
+  // ==========================
+  let coords = spring({ x: 0, y: 0 }, {
+    stiffness: 0.15,
+    damping: 0.4
+  });
+
+  let hovering = $state(false);
+
+  const handlePointer = (e: PointerEvent) => {
+    if (!active) return;
+    coords.set({ x: e.clientX, y: e.clientY });
+  };
+
+  // ==========================
+  // RIPPLE SYSTEM
+  // ==========================
+  let ripples = $state<{ id: number, x: number, y: number }[]>([]);
+  let rippleCount = 0;
+  const MAX_RIPPLES = 10;
+
+  const handleClick = (e: MouseEvent) => {
+    const id = rippleCount++;
+    ripples = [...ripples, { id, x: e.clientX, y: e.clientY }].slice(-MAX_RIPPLES);
+
+    const remove = () => {
+      ripples = ripples.filter(r => r.id !== id);
+    };
+    setTimeout(remove, 600);
+  };
+
+  // ==========================
+  // TERMINAL SYSTEM
+  // ==========================
+  let terminalInput = $state('');
+  let terminalFocus = $state(false);
+  let terminalRef: HTMLInputElement | null = null;
+
+  const commandMap: Record<string, PanelID> = {
+    '/eye': 'Eyes',
+    '/eyes': 'Eyes',
+    '/explorer': 'Explorer',
+    '/settings': 'JotDown',
+    '/home': 'Home'
+  };
+
+  const availableCommands = Object.keys(commandMap);
+
+  // 🔥 SMART SUGGESTION
+  let suggestion = $derived.by(() => {
+    if (!terminalInput || !terminalInput.startsWith('/')) return '';
+
+    const input = terminalInput.toLowerCase();
+
+    let match = availableCommands.find(cmd => cmd.startsWith(input));
+
+    if (!match) {
+      match = availableCommands.find(cmd => cmd.includes(input));
+    }
+
+    return match || '';
+  });
+
+  const processCommand = (e: KeyboardEvent) => {
+    // autocomplete
+    if (e.key === 'Tab' || e.key === 'ArrowRight') {
+      if (suggestion && suggestion !== terminalInput) {
+        e.preventDefault();
+        terminalInput = suggestion;
+        return;
+      }
+    }
+
+    if (e.key !== 'Enter') return;
+
+    const cmd = terminalInput.toLowerCase().trim();
+    const target = commandMap[cmd];
+
+    if (target) {
+      activePanel = target;
+      triggerToast(`EXEC: ${cmd.toUpperCase()}`);
+    } else {
+      triggerToast('UNKNOWN_COMMAND');
+    }
+
+    terminalInput = '';
+  };
+
+  // ==========================
+  // CORE STATE
+  // ==========================
   let apod = $state<ApodData | null>(null);
-  let marsImages = $state<MarsItem[]>([]);
-  let selectedDate = $state<string>('');
-  let loadingMars = $state(false);
-  let activePanel = $state<PanelID | null>(null);
-  let theme = $state<'light' | 'dark'>('dark');
-  let showBriefing = $state(false);
-  let dateTimeout: ReturnType<typeof setTimeout>;
+  let activePanel = $state<PanelID | null>('Home');
+  let toastMessage = $state('');
+  let selectedImage = $state<string | null>(null);
 
-  // === CONFIG (Emojis removed) ===
   const navItems: NavItem[] = [
+    { id: 'Home', label: 'Home' },
     { id: 'Explorer', label: 'Explorer' },
     { id: 'JotDown', label: 'Jot Down' },
-    { id: 'QuickBits', label: 'Quick Bits' },
+    { id: 'QuickBits', label: 'Skynet' },
     { id: 'Eyes', label: 'Eyes' }
   ];
 
-  const toggleTheme = () => {
-    theme = theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-  };
+  // ==========================
+  // APOD CACHE
+  // ==========================
+  const fetchApodWeekly = async () => {
+    const WEEK = 604800000;
+    const cache = localStorage.getItem('apod');
+    const time = localStorage.getItem('apod_time');
 
-  const fetchAPOD = async () => {
+    if (cache && time && Date.now() - Number(time) < WEEK) {
+      apod = JSON.parse(cache);
+      return;
+    }
+
     try {
-      const now = new Date();
-      const weekKey = `apod-${now.getFullYear()}-W${Math.ceil(now.getDate() / 7)}`;
-      const cached = localStorage.getItem('apodCached');
-      const lastFetch = localStorage.getItem('apodLastFetch');
-
-      if (cached && lastFetch === weekKey) {
-        apod = JSON.parse(cached);
-        return;
-      }
-
-      const res = await fetch('https://api.nasa.gov/planetary/apod?api_key=BQ61JZz7GQmytZ4GOF67UawdelUefcBIm6DVUUOr');
+      const res = await fetch(`https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY`);
       const data = await res.json();
-      apod = { ...data, isVideo: data.media_type === 'video' };
-      localStorage.setItem('apodCached', JSON.stringify(apod));
-      localStorage.setItem('apodLastFetch', weekKey);
-    } catch (err) {
-      console.error('Data link failure:', err);
+      apod = data;
+      localStorage.setItem('apod', JSON.stringify(data));
+      localStorage.setItem('apod_time', Date.now().toString());
+    } catch {
+      triggerToast('APOD_ERR');
     }
   };
 
-  const fetchMarsImages = async (date?: string) => {
-    loadingMars = true;
-    const url = date
-      ? `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&date=${date}`
-      : `https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020`;
-    try {
-      const res = await fetch(url);
-      const xmlDoc = new DOMParser().parseFromString(await res.text(), 'text/xml');
-      marsImages = Array.from(xmlDoc.querySelectorAll('item')).slice(0, 10).map(item => ({
-        title: item.querySelector('title')?.textContent || 'Mars Visual',
-        imgUrl: item.querySelector('enclosure')?.getAttribute('url') || ''
-      }));
-    } finally {
-      loadingMars = false;
-    }
+  const triggerToast = (msg: string) => {
+    toastMessage = msg;
+    setTimeout(() => toastMessage = '', 2000);
   };
 
+  // ==========================
+  // LIFECYCLE
+  // ==========================
   onMount(() => {
-    fetchAPOD();
-    fetchMarsImages();
-  });
+    fetchApodWeekly();
 
-  $effect(() => {
-    if (selectedDate) {
-      clearTimeout(dateTimeout);
-      dateTimeout = setTimeout(() => fetchMarsImages(selectedDate), 500);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        terminalRef?.focus();
+      }
+    };
+
+    if (!isMobile) {
+      window.addEventListener('pointermove', handlePointer);
+      window.addEventListener('mousedown', handleClick);
     }
+
+    const onVisibilityChange = () => { active = !document.hidden; };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('keydown', handleKey);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointer);
+      window.removeEventListener('mousedown', handleClick);
+      window.removeEventListener('keydown', handleKey);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   });
 </script>
 
-<div class="relative w-screen h-screen font-mono overflow-hidden transition-colors duration-700 
-  {theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}">
+<div class="w-screen h-screen bg-[#0b0f14] text-[#e6edf3] font-mono flex overflow-hidden select-none">
 
-  {#if apod}
-    <div class="absolute inset-0 z-0 overflow-hidden" transition:fade>
-      {#if apod.isVideo}
-        <iframe src={apod.url} title={apod.title} class="w-full h-full scale-110 blur-sm opacity-30 pointer-events-none"></iframe>
-      {:else}
-        <img src={apod.url} alt={apod.title} class="w-full h-full object-cover opacity-40 blur-[1px]" />
-      {/if}
-      <div class="absolute inset-0 bg-gradient-to-br 
-        {theme === 'dark' ? 'from-transparent via-slate-950/60 to-slate-950' : 'from-transparent via-white/60 to-white'}">
-      </div>
+  {#if !isMobile}
+    <div 
+      class="pointer-events-none fixed z-[999] rounded-full flex items-center justify-center transition-all duration-300 ease-out
+      {hovering ? 'w-10 h-10 border-[#4da3ff] bg-[#4da3ff]/10 shadow-[0_0_20px_rgba(77,163,255,0.2)]' : 'w-6 h-6 border-[#4da3ff]/40'}"
+      style="left: {$coords.x}px; top: {$coords.y}px; transform: translate(-50%, -50%); border-width: 1px;"
+    >
+      <div class="w-1 h-1 bg-[#4da3ff] rounded-full {hovering ? 'scale-150' : 'scale-100'} transition-transform"></div>
     </div>
   {/if}
 
-  <div class="relative z-10 flex h-full">
-    <aside class="flex flex-col justify-between p-4 border-r w-20 md:w-24
-      {theme === 'dark' ? 'bg-black/30 border-white/5 backdrop-blur-2xl' : 'bg-white/40 border-slate-200 backdrop-blur-2xl'}">
-      
-      <div class="flex flex-col gap-12 mt-8">
-        {#each navItems as item}
-          <button 
-            onclick={() => activePanel = activePanel === item.id ? null : item.id}
-            class="relative group flex flex-col items-center gap-2 transition-all 
-            {activePanel === item.id ? 'text-orange-500' : 'opacity-40 hover:opacity-100'}"
-          >
-            <div class="w-8 h-8 border border-current rounded flex items-center justify-center text-[10px] font-black">
-              {item.id.substring(0, 2).toUpperCase()}
+  {#each ripples as ripple (ripple.id)}
+    <div 
+      class="pointer-events-none fixed z-[998] w-4 h-4 border-2 border-[#4da3ff] rounded-full animate-radio-ping"
+      style="left: {ripple.x}px; top: {ripple.y}px; transform: translate(-50%, -50%);"
+    ></div>
+  {/each}
+
+  <aside class="w-20 bg-[#11161c] border-r border-[#2a3138] flex flex-col items-center py-10 gap-8 z-20">
+    {#each navItems as item}
+      <button 
+        onclick={() => activePanel = item.id}
+        onmouseenter={() => hovering = true}
+        onmouseleave={() => hovering = false}
+        class="w-10 h-10 border flex items-center justify-center text-[10px] font-bold transition-all hover:scale-110 active:scale-95
+        {activePanel === item.id ? 'border-[#4da3ff] text-[#4da3ff] bg-[#4da3ff]/5' : 'border-[#2a3138] text-[#9da7b3]'}">
+        {item.id.slice(0,2).toUpperCase()}
+      </button>
+    {/each}
+  </aside>
+
+  <main class="flex-1 flex items-center justify-center relative p-8">
+    
+    {#if toastMessage}
+      <div class="fixed top-8 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#161b22] border border-[#4da3ff] text-[#4da3ff] text-[10px] uppercase tracking-widest z-50" transition:fade>
+        {toastMessage}
+      </div>
+    {/if}
+
+    {#if activePanel === 'Home'}
+      <div class="flex flex-col items-center w-full max-w-3xl h-full overflow-y-auto custom-scrollbar px-6 py-16" transition:fade>
+        
+        <div class="mb-12 text-center">
+          <h1 class="text-6xl font-black italic tracking-tighter text-[#4da3ff] uppercase">ASTRONAUT</h1>
+          <p class="text-[9px] mt-2 tracking-[0.5em] text-[#9da7b3] opacity-40 uppercase">Satellite Command Hub</p>
+        </div>
+
+        {#if apod}
+          <div class="w-full flex flex-col gap-6">
+
+            <div class="rounded-lg overflow-hidden border border-[#2a3138] bg-[#11161c]">
+              <img 
+                src={apod.url}
+                onclick={() => selectedImage = apod.url}
+                class="w-full object-cover max-h-[50vh] grayscale hover:grayscale-0 transition-all duration-1000 cursor-pointer"
+                alt="Space"
+              />
             </div>
-            <span class="hidden md:block text-[8px] uppercase tracking-[0.2em] font-black">{item.label}</span>
-          </button>
-        {/each}
-      </div>
 
-      <div class="mb-6 flex flex-col items-center gap-6">
-        <button onclick={toggleTheme} class="relative w-12 h-12 flex items-center justify-center group">
-          {#if theme === 'dark'}
-            <div class="absolute inset-0 bg-blue-400/20 blur-xl rounded-full animate-pulse"></div>
-            <svg class="w-6 h-6 text-blue-100 drop-shadow-[0_0_8px_rgba(191,219,254,0.8)]" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 3c.132 0 .263 0 .393.007a9 9 0 0010.656 10.656 9 9 0 11-11.049-10.663z" />
-            </svg>
-          {:else}
-            <div class="absolute inset-0 bg-amber-400/40 blur-xl rounded-full animate-pulse"></div>
-            <svg class="w-7 h-7 text-amber-500 drop-shadow-[0_0_10px_rgba(245,158,11,0.8)]" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 7a5 5 0 100 10 5 5 0 000-10zM2 13h2a1 1 0 100-2H2a1 1 0 100 2zm18 0h2a1 1 0 100-2h-2a1 1 0 100 2zM11 2v2a1 1 0 102 0V2a1 1 0 10-2 0zm0 18v2a1 1 0 102 0v-2a1 1 0 10-2 0zM5.99 4.58a1 1 0 10-1.41 1.41l1.06 1.06a1 1 0 101.41-1.41L5.99 4.58zm12.37 12.37a1 1 0 10-1.41 1.41l1.06 1.06a1 1 0 101.41-1.41l-1.06-1.06zm1.06-10.96a1 1 0 11-1.41-1.41l1.06 1.06a1 1 0 111.41 1.41l-1.06-1.06zM7.05 18.36a1 1 0 11-1.41-1.41l1.06 1.06a1 1 0 111.41 1.41l-1.06-1.06z" />
-            </svg>
-          {/if}
-        </button>
-      </div>
-    </aside>
-
-    <main class="flex-1 relative flex flex-col items-center justify-center pointer-events-none px-6">
-      <h1 class="text-7xl md:text-[11rem] font-black tracking-tighter italic select-none 
-        {theme === 'dark' ? 'text-white/5' : 'text-slate-900/5'} transition-colors duration-1000">
-        ASTRONAUT
-      </h1>
-
-      <div class="absolute bottom-12 left-12 flex items-end gap-5 pointer-events-auto">
-        <div class="w-16 h-16 border-2 border-orange-600 flex items-center justify-center font-black text-2xl transform rotate-3 shadow-lg bg-orange-600 text-white">
-          A_04
-        </div>
-        <div class="flex flex-col text-left">
-          <span class="text-[9px] opacity-40 uppercase tracking-[0.4em] font-bold">Protocol Active</span>
-          <div class="text-[11px] font-black tracking-widest border-b border-orange-600 pb-1">
-            STATION_04 // FORK_ME
-          </div>
-        </div>
-      </div>
-
-      {#if activePanel}
-        <div id="active-panel" 
-          class="absolute top-8 right-8 bottom-8 w-full max-w-lg p-10 rounded-xl shadow-2xl border flex flex-col pointer-events-auto
-          {theme === 'dark' ? 'bg-black/90 border-white/10 backdrop-blur-3xl' : 'bg-white border-slate-200 shadow-slate-200'}"
-          transition:fly={{ x: 40, duration: 400 }}>
-          
-          <header class="flex justify-between items-center mb-10 border-b border-orange-500/20 pb-8">
-            <h2 class="text-4xl font-black uppercase italic text-orange-500 tracking-tighter">{activePanel}</h2>
-            <button onclick={() => activePanel = null} class="text-[10px] font-bold tracking-widest border px-3 py-1 hover:bg-orange-500 hover:text-white transition-colors">CLOSE</button>
-          </header>
-
-          <div class="flex-1 overflow-y-auto custom-scrollbar">
-            {#if activePanel === 'Eyes'}
-              <div class="space-y-6">
-                <input type="date" bind:value={selectedDate} 
-                  class="w-full bg-transparent border-b border-orange-500/50 p-3 text-sm outline-none font-bold" />
-                
-                {#if loadingMars}
-                  <div class="h-40 border border-dashed border-orange-500/20 animate-pulse flex items-center justify-center text-[10px] tracking-widest opacity-40">FETCHING_VISUALS...</div>
-                {:else}
-                  <div class="grid gap-6">
-                    {#each marsImages as item}
-                      <div class="border border-white/5 overflow-hidden shadow-2xl group">
-                        <img src={item.imgUrl} alt={item.title} class="w-full h-48 object-cover transition-transform duration-1000 group-hover:scale-105" />
-                        <div class="p-3 bg-black/40 text-[9px] uppercase font-bold tracking-tighter">
-                          {item.title}
-                        </div>
-                      </div>
-                    {/each}
-                  </div>
-                {/if}
+            <div class="group relative rounded-md {terminalFocus ? 'ring-1 ring-[#4da3ff]/50' : 'border border-[#2a3138]'}">
+              
+              <div class="flex items-center justify-between px-4 py-2 bg-[#161b22]/90 border-b border-[#2a3138]">
+                <span class="text-[9px] text-[#9da7b3]/40 uppercase italic">zsh — session_01</span>
               </div>
-            {:else}
-              <div class="h-full flex items-center justify-center opacity-20 text-[10px] tracking-[0.5em]">SYSTEM_PENDING</div>
-            {/if}
+
+              <div class="relative flex items-center p-4 bg-[#0b0f14]/95">
+                <span class="text-[#4da3ff] mr-3">~</span>
+                
+                <div class="relative flex-1">
+                  {#if suggestion && terminalFocus}
+                    <span class="absolute left-0 text-sm text-[#e6edf3]/20 pointer-events-none whitespace-pre">
+                      {terminalInput}{suggestion.slice(terminalInput.length)}
+                    </span>
+                  {/if}
+
+                  <input 
+                    bind:this={terminalRef}
+                    bind:value={terminalInput}
+                    onkeydown={processCommand}
+                    onfocus={() => { terminalFocus = true; hovering = true; }}
+                    onblur={() => { terminalFocus = false; hovering = false; }}
+                    spellcheck="false"
+                    class="relative z-10 w-full bg-transparent outline-none text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-between text-[9px] opacity-40">
+              <p>{apod.title}</p>
+              <p class="text-[#4da3ff]">LNK_CONNECTED</p>
+            </div>
+
           </div>
-        </div>
-      {/if}
-    </main>
-  </div>
+        {/if}
+
+      </div>
+    {/if}
+
+    {#if selectedImage}
+      <div class="fixed inset-0 bg-black/95 flex items-center justify-center z-[100]" onclick={() => selectedImage = null}>
+        <img src={selectedImage} class="max-w-[90%] max-h-[90%] border border-[#4da3ff]" />
+      </div>
+    {/if}
+
+  </main>
 </div>
 
-<style lang="postcss">
-  .custom-scrollbar::-webkit-scrollbar { width: 2px; }
-  .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-orange-500; }
+<style>
+  body { cursor: none; margin: 0; }
+  input { cursor: text; }
 
-  /* Sun/Moon Glow Animation */
-  @keyframes pulse {
-    0%, 100% { opacity: 0.3; transform: scale(1); }
-    50% { opacity: 0.6; transform: scale(1.1); }
+  @keyframes radio-ping {
+    0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(2.8); opacity: 0; }
   }
-  .animate-pulse {
-    animation: pulse 3s ease-in-out infinite;
+
+  .animate-radio-ping {
+    animation: radio-ping 0.6s forwards;
   }
 </style>
