@@ -1,5 +1,5 @@
 """
-Skynet — Astronomy Q&A Chatbot Backend
+Skynet: Astral Module — Astronomy Q&A Chatbot Backend
 =======================================
 FastAPI server that answers astronomy questions using an extensive
 built-in knowledge base with fuzzy keyword matching.
@@ -11,6 +11,8 @@ Run:
 
 Endpoint:
     POST /chat  { "message": "..." }  →  { "reply": "..." }
+
+Based on Skynet, Independent Sister Module of Skynet: Bond and Skynet: ToxNet
 """
 
 import sys
